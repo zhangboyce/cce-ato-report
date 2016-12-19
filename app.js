@@ -24,4 +24,4 @@ app.use(require('koa-static-server')({rootDir: 'public', rootPath: '/public'}));
 
 const port = 8888;
 app.listen(port);
-console.log('Activity Manager listening on port ' + port);
+console.log('Report listening on port ' + port);
