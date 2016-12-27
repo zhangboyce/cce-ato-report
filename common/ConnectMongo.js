@@ -2,22 +2,23 @@
 
 let mongoClient = require('mongodb').MongoClient;
 
-module.exports = function(url, username, password) {
-    return mongoClient.connect(url).then(db => {
-        if (username && password) {
-            let adminDb = db.admin();
-            adminDb.authenticate(username, password);
+let dbPool = {};
+module.exports = {
+    connect: (url, dbname) => {
+        let db = dbPool[dbname];
+        if (!db) {
+            db = mongoClient.connect(url).then(db => {
+                console.log("Connect mongo db: " + url);
+                return db;
+            }).catch(err => {
+                console.log("Connect mongo db: " + url + " error." + err);
+            });
+            dbPool[dbname] = db;
         }
-        console.log("Connect mongo db: " + url);
-
-        let close = db.close;
-        db.close = () => {
-            //console.log('close db!!!' + url);
-            close.call(db);
-        };
-
         return db;
-    }).catch(err => {
-        console.log("Connect mongo db: " + url + " error." + err);
-    });
+
+    },
+    get: dbname => {
+        return dbPool[dbname];
+    }
 };

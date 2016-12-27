@@ -22,6 +22,11 @@ app.use(logger());
 app.use(serve(path.join(__dirname, 'build')));
 app.use(require('koa-static-server')({rootDir: 'public', rootPath: '/public'}));
 
-const port = 8888;
+const ConnectMongo = require('./common/ConnectMongo');
+const config = require('config');
+ConnectMongo.connect(config.get('mongo.contentpool'), 'contentpool');
+ConnectMongo.connect(config.get('mongo.raw'), 'raw');
+
+let port = config.get('port');
 app.listen(port);
 console.log('Report listening on port ' + port);

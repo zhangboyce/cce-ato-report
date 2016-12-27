@@ -2,10 +2,10 @@
 const parse = require('co-body');
 const router = require('koa-router')();
 const redis = require('redis');
-const ConnectMongo = require('../common/ConnectMongo');
-const mongoConfig = require('../config/mongo.config');
-const redisConfig = require('../config/redis.config');
 const _ = require('lodash');
+const ConnectMongo = require('../common/ConnectMongo');
+const config = require('config');
+
 
 router.get('/', function *() {
     yield this.render('index');
@@ -22,8 +22,8 @@ router.get('/api/weibo/articles', function *() {
 
     console.log('match: ' + JSON.stringify(match));
 
-    let mongodb = yield ConnectMongo(mongoConfig.local_url);
-    let results = mongodb.collection("weibo_article_list").find(match).sort({ publish_date: -1 });
+    let mongodb = yield ConnectMongo.get('contentpool');
+    let results = mongodb.collection("weibo").find(match).sort({ publish_date: -1 });
     let items = yield results.toArray() || [];
 
     console.log('Execute /api/weibo/articles, results: ' + JSON.stringify(items));
@@ -35,7 +35,7 @@ router.get('/api/weibo/watchlist', function *() {
 
     console.log('Execute /api/weibo/watchlist, params: {}');
 
-    let mongodb = yield ConnectMongo(mongoConfig.local_url);
+    let mongodb = yield ConnectMongo.get('raw');
     let results = mongodb.collection("weibo_watchlist").find({});
     let items = yield results.toArray() || [];
 
@@ -66,8 +66,8 @@ router.get('/api/weibo/calculate', function *() {
     console.log('match: ' + JSON.stringify(match));
     console.log('group: ' + JSON.stringify(group));
 
-    let mongodb = yield ConnectMongo(mongoConfig.local_url);
-    let results = mongodb.collection("weibo_article_list").aggregate([ { $match: match }, { $group: group }]);
+    let mongodb = yield ConnectMongo.get('contentpool');
+    let results = mongodb.collection("weibo").aggregate([ { $match: match }, { $group: group }]);
     let items = yield results.toArray() || [];
 
     this.body = items.reduce((map, item) => {
@@ -98,7 +98,7 @@ router.get('/api/weixin/calculate', function *() {
 
     console.log('match: ' + JSON.stringify(match));
 
-    let mongodb = yield ConnectMongo(mongoConfig.local_url);
+    let mongodb = yield ConnectMongo.get('raw');
 
     let biz_totalCur = mongodb.collection("weixin_article_list").aggregate([ { $match: match }, { $group: group }]);
     let biz_totalArr = yield biz_totalCur.toArray() || [];
@@ -117,7 +117,7 @@ router.get('/api/weixin/calculate', function *() {
 
     let pushedMap = _.groupBy(biz_mid_idxArr, arr => arr.biz + '_' + arr.mid);
 
-    let client = redis.createClient(redisConfig);
+    let client = redis.createClient(config.get('redis'));
 
     let result = {};
     for (let biz_total of biz_totalArr) {
@@ -150,70 +150,6 @@ router.get('/api/weixin/calculate', function *() {
     console.log('result: ' + JSON.stringify(result));
     this.body = result;
 });
-
-router.post('/api/load/data', function *() {
-    let data = yield parse(this);
-    let weiboIds = data.weiboIds;
-    let weixinIds = data.weixinIds;
-
-    console.log(`Load, params: { weiboIds: ${weiboIds}, weixinIds: ${weixinIds}}`);
-
-    yield loadWeiboWatchList(weiboIds);
-    yield loadWeiboArticleList(weiboIds);
-    yield loadWeixinArticleList(weixinIds);
-
-    this.body = true ;
-
-});
-
-function * loadWeiboWatchList(weiboIds) {
-    yield load(
-        mongoConfig.raw_url, "weibo_watchlist",
-        mongoConfig.local_url, "weibo_watchlist",
-        "_id", weiboIds
-    );
-}
-
-function * loadWeiboArticleList(weiboIds) {
-    yield load(
-        mongoConfig.contentpool_url, "weibo",
-        mongoConfig.local_url, "weibo_article_list",
-        "weibo_id", weiboIds
-    );
-}
-
-function * loadWeixinArticleList(weixinIds) {
-    yield load(
-        mongoConfig.raw_url, "weixin_article_list",
-        mongoConfig.local_url, "weixin_article_list",
-        "biz", weixinIds
-    );
-}
-
-function * load(exportDbUrl, exportCollectionName, importUrl, importCollectionName, idField, ids) {
-    let condition = {};
-    condition[idField] = {$in: ids.split(',')};
-
-    let exportDb = yield ConnectMongo(exportDbUrl);
-    let results = exportDb.collection(exportCollectionName).find(condition);
-    let items = yield results.toArray() || [];
-
-    let importDb = yield ConnectMongo(importUrl);
-    let importCollection = importDb.collection(importCollectionName);
-    let importBatch = importCollection.initializeUnorderedBulkOp({useLegacyOps: true});
-
-    console.log(`Load ${ importCollectionName } sum(${ items.length }).`);
-    let i = 0;
-    for (let item of items) {
-        importBatch.find({_id: item._id}).upsert().updateOne(item);
-        console.log(`Load ${ importCollectionName } item(${ ++i }). ${JSON.stringify(item)}`);
-    }
-
-    if (importBatch.length != 0) {
-        yield importBatch.execute();
-        console.log(`Load ${ importCollectionName } batch execute!`);
-    }
-}
 
 let hmget = function (client, key, fileds) {
     return new Promise((resolve, reject) => {

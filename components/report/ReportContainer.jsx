@@ -22,17 +22,19 @@ export default class ReportContainer extends React.Component {
 
     constructor(props) {
         super(props);
+
+        let date = new Date();
+        let firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+        let lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
         this.state = {
             weiboWatchMap: null,
             weiboStatMap: null,
             weiboStatMapBak: null,
             weixinStatMap: null,
 
-            startDate: moment(),
-            endDate: moment(),
-
-            days: 1,
-            weeks: 1 / 7,
+            startDate: moment(firstDay),
+            endDate: moment(lastDay),
 
             removeWeiboArticles: {}
         }
@@ -102,28 +104,15 @@ export default class ReportContainer extends React.Component {
 
     handleFlush = () => {
 
-        let days = ((this.state.endDate - this.state.startDate) / (1000*60*60*24)) + 1;
-        let months = days / 30;
-        let weeks = days / 7;
-
         this.setState({
             weiboWatchMap: null,
             weiboStatMap: null,
             weiboStatMapBak: null,
             weixinStatMap:null,
-            removeWeiboArticles: {},
-            days: days,
-            weeks: weeks
+            removeWeiboArticles: {}
         });
 
         this.load();
-    };
-
-    handleReinit = () => {
-        let comp = this;
-        $.post('api/load/data', { weiboIds: weiboIds, weixinIds: weixinIds }, result => {
-            if (result) comp.load();
-        })
     };
 
     load = () => {
@@ -164,7 +153,9 @@ export default class ReportContainer extends React.Component {
 
     render() {
 
-        console.log('removeWeiboArticles: ' + JSON.stringify(this.state.removeWeiboArticles));
+        let days = ((this.state.endDate - this.state.startDate) / (1000*60*60*24)) + 1;
+        let months = days / 30;
+        let weeks = days / 7;
 
         return (
             <div className="container content">
@@ -203,9 +194,6 @@ export default class ReportContainer extends React.Component {
                     <div className="panel download-excel">
                         <button className="btn btn-download-excel" id="btn-download-excel">Export Excel</button>
                     </div>
-                    <div className="panel init">
-                        <button className="btn btn-init" onClick={ this.handleReinit }>Reinit</button>
-                    </div>
                 </div>
                 {
                     this.state.weiboWatchMap ||
@@ -218,8 +206,8 @@ export default class ReportContainer extends React.Component {
                         weiboStatMap={ this.state.weiboStatMap }
                         startDate={ this.state.startDate.format(format) }
                         endDate={ this.state.endDate.format(format) }
-                        days={ this.state.days }
-                        weeks={ this.state.weeks }
+                        days={ days }
+                        weeks={ weeks }
                         removeWeiboArticles={ this.state.removeWeiboArticles }
                         onToggleCheckWeiboArticle={ this.handleToggleCheckWeiboArticle }
                         onFilterWeiboArticle={ this.handleFilterWeiboArticle } /> :
